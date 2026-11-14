@@ -1,0 +1,41 @@
+name: boardgame-hub
+
+services:
+  boardgame-app:
+    build:
+      context: ../Boardgame-page
+      dockerfile: Dockerfile
+    container_name: boardgame_hub_app
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      BOARDGAME_APP_HOST: "0.0.0.0"
+      BOARDGAME_APP_PORT: "8088"
+      BOARDGAME_DB_PATH: "/app/data/boardgames.sqlite3"
+      BOARDGAME_SEED_DEFAULTS: "true"
+    volumes:
+      - boardgame_data:/app/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/api/v1/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  boardgame-bdd:
+    image: mcr.microsoft.com/playwright/python:v1.58.0-noble
+    container_name: boardgame_hub_bdd
+    shm_size: "1gb"
+    working_dir: /workspace
+    depends_on:
+      boardgame-app:
+        condition: service_healthy
+    environment:
+      BOARDGAME_E2E_BASE_URL: "http://boardgame-app:8088"
+    volumes:
+      - ./:/workspace
+    command: ["sh", "-c", "pip install --no-cache-dir -q -r requirements.txt && behave -q --no-skipped features/"]
+
+volumes:
+  boardgame_data:
